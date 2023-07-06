@@ -5,10 +5,10 @@ ext=$2
 objectsdir=$3
 basepath=./sfizz~/build/pd/sfizz
 
-if [[ $system == "Windows" ]]
+if [ $system = "Windows" ]
 then
   baseext=".dll"
-elif [[ $system == "Darwin" ]]
+elif [ $system = "Darwin" ]
 then
   baseext=".pd_darwin"
 else
