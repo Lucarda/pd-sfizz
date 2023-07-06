@@ -8,9 +8,7 @@
 #include <sfizz.h>
 #include <sfizz/import/sfizz_import.h>
 #include <string.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 
 #if defined(_WIN32)
 __declspec(dllexport)
