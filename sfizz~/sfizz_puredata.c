@@ -292,7 +292,7 @@ __declspec(dllexport)
 #else
 __attribute__((visibility("default")))
 #endif
-void sfizz_setup()
+void sfz_tilde_setup()
 {
     if (GitBuildId[0])
         post("sfizz external for Puredata, version '%s.%s'", SFIZZ_VERSION, GitBuildId);
@@ -300,7 +300,7 @@ void sfizz_setup()
         post("sfizz external for Puredata, version '%s'", SFIZZ_VERSION);
 
     cls_sfizz_tilde = class_new(
-        gensym("sfizz~"),
+        gensym("sfz~"),
         (t_newmethod)&sfizz_tilde_new,
         (t_method)&sfizz_tilde_free,
         sizeof(t_sfizz_tilde),
