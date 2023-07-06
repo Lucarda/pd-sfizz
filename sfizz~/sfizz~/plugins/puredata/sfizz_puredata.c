@@ -21,11 +21,10 @@ static t_class* sfz_class;
 typedef struct _sfz{
     t_object        x_obj;
     sfizz_synth_t  *x_synth;
-    t_outlet       *outputs[2];
-    int             midi[3];
-    int             midinum;
-    t_symbol       *dir;
+    int             x_midinum;
+    t_symbol       *x_dir;
     char           *filepath;
+    t_outlet       *outputs[2];
 }t_sfz;
 
 static t_float clamp01(t_float x){
@@ -41,7 +40,7 @@ static t_float clampB1(t_float x){
 }
 
 static void sfz_set_file(t_sfz* x, const char* file){
-    const char* dir = x->dir->s_name;
+    const char *dir = x->x_dir->s_name;
     char* filepath;
     if(file[0] != '\0'){
         filepath = malloc(strlen(dir) + 1 + strlen(file) + 1);
@@ -55,6 +54,40 @@ static void sfz_set_file(t_sfz* x, const char* file){
     x->filepath = filepath;
 }
 
+/*static void sfz_do_load(t_sfz *x, t_symbol *name){
+    const char* filename = name->s_name;
+    const char* ext = strrchr(filename, '.');
+    char realdir[MAXPDSTRING], *realname = NULL;
+    int fd;
+    if(ext && !strchr(ext, '/')){ // extension already supplied, no default extension
+        ext = "";
+        fd = canvas_open(x->x_canvas, filename, ext, realdir, &realname, MAXPDSTRING, 0);
+        if(fd < 0){
+            pd_error(x, "[sfz~]: can't find soundfont %s", filename);
+            return;
+        }
+    }
+    else{
+        ext = ".sfz"; // let's try sfz
+        fd = canvas_open(x->x_canvas, filename, ext, realdir, &realname, MAXPDSTRING, 0);
+        if(fd < 0){ // failed
+            pd_error(x, "[sfz~]: can't find soundfont %s", filename);
+            return;
+        }
+    }
+    sys_close(fd);
+    chdir(realdir);
+    int id = fluid_synth_sfload(x->x_synth, realname, 0);
+    if(id >= 0){
+        fluid_synth_program_reset(x->x_synth);
+        x->x_sfont = fluid_synth_get_sfont_by_id(x->x_synth, id);
+        x->x_sfname = name;
+    }
+    else
+        post("[sfz~]: couldn't load %d", realname);
+}*/
+
+
 static bool sfz_do_load(t_sfz* x){
     bool loaded;
     if(x->filepath[0] != '\0')
@@ -64,8 +97,13 @@ static bool sfz_do_load(t_sfz* x){
     return(loaded);
 }
 
-static void sfz_note(t_sfz* x, t_symbol* sym, int ac, t_atom* av){
-    (void)sym;
+static void sfz_load(t_sfz* x, t_symbol* sym){
+    sfz_set_file(x, sym->s_name);
+    sfz_do_load(x);
+}
+
+static void sfz_note(t_sfz* x, t_symbol *s, int ac, t_atom* av){
+    (void)s;
     if(ac == 2 && av[0].a_type == A_FLOAT && av[1].a_type == A_FLOAT) {
         int key = (int)av[0].a_w.w_float;
         if(key < 0 || key > 127)
@@ -81,8 +119,9 @@ static void sfz_note(t_sfz* x, t_symbol* sym, int ac, t_atom* av){
 static void sfz_midiin(t_sfz* x, t_float f){
     int byte = (int)f;
     bool isstatus = (byte & 0x80) != 0;
-    int* midi = x->midi;
-    int midinum = x->midinum;
+    int midi[3];
+//    int* midi = x->midi;
+    int midinum = x->x_midinum;
     //
     if(isstatus){
         midi[0] = byte;
@@ -124,17 +163,7 @@ static void sfz_midiin(t_sfz* x, t_float f){
         }
         break;
     }
-    x->midinum = midinum;
-}
-
-static void sfz_load(t_sfz* x, t_symbol* sym){
-    sfz_set_file(x, sym->s_name);
-    sfz_do_load(x);
-}
-
-static void sfz_reload(t_sfz* x, t_float value){
-    (void)value;
-    sfz_do_load(x);
+    x->x_midinum = midinum;
 }
 
 static void sfz_hdcc(t_sfz* x, t_float f1, t_float f2){
@@ -164,10 +193,10 @@ static void sfz_touch(t_sfz* x, t_float f1){
     sfz_hdtouch(x, f1 / 127);
 }
 
-static void sfz_hdpolytouch(t_sfz* x, t_float key, t_float f2){
+static void sfz_hdpolytouch(t_sfz* x, t_float f1, t_float key){
     if(key < 0 || key > 127)
         return;
-    sfizz_send_hd_poly_aftertouch(x->x_synth, 0, (int)key, clamp01(f2));
+    sfizz_send_hd_poly_aftertouch(x->x_synth, 0, (int)key, clamp01(f1));
 }
 
 static void sfz_polytouch(t_sfz* x, t_float f1, t_float f2){
@@ -226,7 +255,7 @@ static void* sfz_new(t_symbol *s, int ac, t_atom *av){
         pd_free((t_pd*)x);
         return(NULL);
     }
-    x->dir = canvas_getcurrentdir();
+    x->x_dir = canvas_getcurrentdir();
     x->outputs[0] = outlet_new(&x->x_obj, &s_signal);
     x->outputs[1] = outlet_new(&x->x_obj, &s_signal);
     sfizz_synth_t* synth = sfizz_create_synth();
@@ -248,12 +277,11 @@ void sfz_tilde_setup(){
     class_addfloat(sfz_class, (t_method)sfz_midiin);
     class_addlist(sfz_class, (t_method)sfz_note);
     class_addmethod(sfz_class, (t_method)sfz_note, gensym("note"), A_GIMME, 0);
-    class_addmethod(sfz_class, (t_method)sfz_cc, gensym("cc"), A_FLOAT, A_FLOAT, 0);
+    class_addmethod(sfz_class, (t_method)sfz_cc, gensym("ctl"), A_FLOAT, A_FLOAT, 0);
     class_addmethod(sfz_class, (t_method)sfz_bend, gensym("bend"), A_FLOAT, 0);
     class_addmethod(sfz_class, (t_method)sfz_touch, gensym("touch"), A_FLOAT, 0);
     class_addmethod(sfz_class, (t_method)sfz_polytouch, gensym("polytouch"), A_FLOAT, A_FLOAT, 0);
     class_addmethod(sfz_class, (t_method)sfz_load, gensym("open"), A_DEFSYM, 0);
-    class_addmethod(sfz_class, (t_method)sfz_reload, gensym("reopen"), A_DEFFLOAT, 0);
     class_addmethod(sfz_class, (t_method)sfz_voices, gensym("voices"), A_FLOAT, 0);
     class_addmethod(sfz_class, (t_method)sfz_version, gensym("version"), 0);
 }
