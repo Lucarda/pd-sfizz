@@ -12,7 +12,7 @@
 #include <sfizz.h>
 #include <sfizz/import/sfizz_import.h>
 #include <unistd.h>
-//#include <string.h>
+#include <string.h>
 #include <stdlib.h>
 
 #if defined(_WIN32)
