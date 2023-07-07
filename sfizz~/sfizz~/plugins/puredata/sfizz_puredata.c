@@ -12,8 +12,7 @@
 #include <sfizz.h>
 #include <sfizz/import/sfizz_import.h>
 #include <unistd.h>
-#include <dirent.h>
-#include <string.h>
+//#include <string.h>
 #include <stdlib.h>
 
 #if defined(_WIN32)
@@ -76,11 +75,11 @@ static void sfz_note(t_sfz* x, t_symbol *s, int ac, t_atom* av){
         int key = (int)av[0].a_w.w_float;
         if(key < 0 || key > 127)
             return;
-        t_float vel = clamp01(av[1].a_w.w_float / 127);
+        int vel = av[1].a_w.w_float;
         if(vel > 0)
-            sfizz_send_hd_note_on(x->x_synth, 0, key, vel);
+            sfizz_send_note_on(x->x_synth, 0, key, vel);
         else
-            sfizz_send_hd_note_off(x->x_synth, 0, key, 0);
+            sfizz_send_note_off(x->x_synth, 0, key, 0);
     }
 }
 
@@ -134,47 +133,39 @@ static void sfz_midiin(t_sfz* x, t_float f){
     x->x_midinum = midinum;
 }
 
-static void sfz_hdcc(t_sfz* x, t_float f1, t_float f2){
-    int cc = (int)f1;
+static void sfz_cc(t_sfz* x, t_float f1, t_float f2){
+    int cc = (int)f2;
     if(cc < 0 || cc >= MIDI_CC_COUNT)
         return;
-    sfizz_automate_hdcc(x->x_synth, 0, (int)cc, clamp01(f2));
-}
-
-static void sfz_cc(t_sfz* x, t_float f1, t_float f2){
-    sfz_hdcc(x, f1, f2 / 127);
-}
-
-static void sfz_hdbend(t_sfz* x, t_float f1){
-    sfizz_send_hd_pitch_wheel(x->x_synth, 0, clampB1(f1));
+    sfizz_automate_hdcc(x->x_synth, 0, (int)cc, clamp01(f1/127));
 }
 
 static void sfz_bend(t_sfz* x, t_float f1){
-    return sfz_hdbend(x, f1 / 8191);
-}
-
-static void sfz_hdtouch(t_sfz* x, t_float f1){
-    sfizz_send_hd_channel_aftertouch(x->x_synth, 0, clamp01(f1));
+    sfizz_send_pitch_wheel(x->x_synth, 0, clampB1(f1));
 }
 
 static void sfz_touch(t_sfz* x, t_float f1){
-    sfz_hdtouch(x, f1 / 127);
+    sfizz_send_channel_aftertouch(x->x_synth, 0, clamp01(f1));
 }
 
-static void sfz_hdpolytouch(t_sfz* x, t_float f1, t_float key){
+static void sfz_polytouch(t_sfz* x, t_float f1, t_float key){
     if(key < 0 || key > 127)
         return;
-    sfizz_send_hd_poly_aftertouch(x->x_synth, 0, (int)key, clamp01(f1));
+    sfizz_send_poly_aftertouch(x->x_synth, 0, (int)key, clamp01(f1));
 }
 
-static void sfz_polytouch(t_sfz* x, t_float f1, t_float f2){
-    sfz_hdpolytouch(x, f1, f2 / 127);
+static void sfz_tuningfreq(t_sfz* x, t_float f){
+    sfizz_set_tuning_frequency(x->x_synth, f);
 }
 
 static void sfz_voices(t_sfz* x, t_float f){
     int numvoices = (int)f;
     numvoices = (numvoices < 1) ? 1 : numvoices;
     sfizz_set_num_voices(x->x_synth, numvoices);
+}
+
+static void sfz_panic(t_sfz* x){
+    sfizz_all_sound_off(x->x_synth);
 }
 
 static void sfz_version(t_sfz *x){
@@ -238,5 +229,7 @@ void sfz_tilde_setup(){
     class_addmethod(sfz_class, (t_method)sfz_polytouch, gensym("polytouch"), A_FLOAT, A_FLOAT, 0);
     class_addmethod(sfz_class, (t_method)sfz_open, gensym("open"), A_DEFSYM, 0);
     class_addmethod(sfz_class, (t_method)sfz_voices, gensym("voices"), A_FLOAT, 0);
+    class_addmethod(sfz_class, (t_method)sfz_tuningfreq, gensym("tuningfreq"), A_FLOAT, 0);
+    class_addmethod(sfz_class, (t_method)sfz_panic, gensym("panic"), 0);
     class_addmethod(sfz_class, (t_method)sfz_version, gensym("version"), 0);
 }
