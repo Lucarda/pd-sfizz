@@ -16,9 +16,9 @@ else
 fi
 
 mkdir -p $objectsdir
-cp $basepath/sfizz~-help.pd $objectsdir/sfz~-help.pd
+cp ./sfz~-help.pd $objectsdir
 cp $basepath/sfizz$baseext $objectsdir/sfz~.$ext
-cp $basepath/example.sfz $objectsdir
+cp ./example.sfz $objectsdir
 
 if [ $system = "Windows" ]
 then
