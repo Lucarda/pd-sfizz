@@ -19,3 +19,8 @@ mkdir -p $objectsdir
 cp $basepath/sfizz~-help.pd $objectsdir/sfz~-help.pd
 cp $basepath/sfizz$baseext $objectsdir/sfz~.$ext
 cp $basepath/example.sfz $objectsdir
+
+if [ $system = "Windows" ]
+then
+  strip $objectsdir/sfz~.$ext
+fi
