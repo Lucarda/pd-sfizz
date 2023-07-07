@@ -15,11 +15,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-#if defined(_WIN32)
-__declspec(dllexport)
-#else
-__attribute__((visibility("default")))
-#endif
 
 static t_class* sfz_class;
 
@@ -216,6 +211,11 @@ static void* sfz_new(t_symbol *s, int ac, t_atom *av){
     return(x);
 }
 
+#if defined(_WIN32)
+__declspec(dllexport)
+#else
+__attribute__((visibility("default")))
+#endif
 void sfz_tilde_setup(){
     sfz_class = class_new(gensym("sfz~"), (t_newmethod)&sfz_new,
         (t_method)sfz_free, sizeof(t_sfz), CLASS_DEFAULT, A_GIMME, 0);
