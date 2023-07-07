@@ -4,9 +4,15 @@
 // license. You should have receive a LICENSE.md file along with the code.
 // If not, contact the sfizz maintainers at https://github.com/sfztools/sfizz
 
+#ifdef _WIN32
+#include <io.h>
+#endif
+
 #include <m_pd.h>
 #include <sfizz.h>
 #include <sfizz/import/sfizz_import.h>
+#include <unistd.h>
+#include <dirent.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -21,9 +27,8 @@ static t_class* sfz_class;
 typedef struct _sfz{
     t_object        x_obj;
     sfizz_synth_t  *x_synth;
+    t_canvas       *x_canvas;
     int             x_midinum;
-    t_symbol       *x_dir;
-    char           *filepath;
     t_outlet       *outputs[2];
 }t_sfz;
 
@@ -39,24 +44,9 @@ static t_float clampB1(t_float x){
     return(x);
 }
 
-static void sfz_set_file(t_sfz* x, const char* file){
-    const char *dir = x->x_dir->s_name;
-    char* filepath;
-    if(file[0] != '\0'){
-        filepath = malloc(strlen(dir) + 1 + strlen(file) + 1);
-        sprintf(filepath, "%s/%s", dir, file);
-    }
-    else{
-        filepath = malloc(1);
-        *filepath = '\0';
-    }
-    free(x->filepath);
-    x->filepath = filepath;
-}
-
-/*static void sfz_do_load(t_sfz *x, t_symbol *name){
-    const char* filename = name->s_name;
-    const char* ext = strrchr(filename, '.');
+static void sfz_open(t_sfz *x, t_symbol *name){
+    const char *filename = name->s_name;
+    const char *ext = strrchr(filename, '.');
     char realdir[MAXPDSTRING], *realname = NULL;
     int fd;
     if(ext && !strchr(ext, '/')){ // extension already supplied, no default extension
@@ -77,29 +67,7 @@ static void sfz_set_file(t_sfz* x, const char* file){
     }
     sys_close(fd);
     chdir(realdir);
-    int id = fluid_synth_sfload(x->x_synth, realname, 0);
-    if(id >= 0){
-        fluid_synth_program_reset(x->x_synth);
-        x->x_sfont = fluid_synth_get_sfont_by_id(x->x_synth, id);
-        x->x_sfname = name;
-    }
-    else
-        post("[sfz~]: couldn't load %d", realname);
-}*/
-
-
-static bool sfz_do_load(t_sfz* x){
-    bool loaded;
-    if(x->filepath[0] != '\0')
-        loaded = sfizz_load_or_import_file(x->x_synth, x->filepath, NULL);
-    else
-        loaded = sfizz_load_string(x->x_synth, "default.sfz", "<region>sample=*sine");
-    return(loaded);
-}
-
-static void sfz_load(t_sfz* x, t_symbol* sym){
-    sfz_set_file(x, sym->s_name);
-    sfz_do_load(x);
+    sfizz_load_or_import_file(x->x_synth, realname, NULL);
 }
 
 static void sfz_note(t_sfz* x, t_symbol *s, int ac, t_atom* av){
@@ -233,8 +201,6 @@ static void sfz_dsp(t_sfz* x, t_signal** sp){
 }
 
 static void sfz_free(t_sfz* x){
-    if(x->filepath)
-        free(x->filepath);
     if(x->x_synth)
         sfizz_free(x->x_synth);
     if(x->outputs[0])
@@ -246,27 +212,16 @@ static void sfz_free(t_sfz* x){
 static void* sfz_new(t_symbol *s, int ac, t_atom *av){
     (void)s;
     t_sfz* x = (t_sfz*)pd_new(sfz_class);
-    const char *file;
-    if(ac == 0)
-        file = "";
-    else if(ac == 1 && av[0].a_type == A_SYMBOL)
-        file = av[0].a_w.w_symbol->s_name;
-    else{
-        pd_free((t_pd*)x);
-        return(NULL);
-    }
-    x->x_dir = canvas_getcurrentdir();
+    x->x_canvas = canvas_getcurrent();
     x->outputs[0] = outlet_new(&x->x_obj, &s_signal);
     x->outputs[1] = outlet_new(&x->x_obj, &s_signal);
     sfizz_synth_t* synth = sfizz_create_synth();
     x->x_synth = synth;
     sfizz_set_sample_rate(synth, sys_getsr());
     sfizz_set_samples_per_block(synth, sys_getblksize());
-    sfz_set_file(x, file);
-    if(!sfz_do_load(x)){
-        pd_free((t_pd*)x);
-        return(NULL);
-    }
+    sfizz_load_string(x->x_synth, "default.sfz", "<region>sample=*sine");
+    if(ac == 1 && av[0].a_type == A_SYMBOL)
+        sfz_open(x, av[0].a_w.w_symbol);
     return(x);
 }
 
@@ -281,7 +236,7 @@ void sfz_tilde_setup(){
     class_addmethod(sfz_class, (t_method)sfz_bend, gensym("bend"), A_FLOAT, 0);
     class_addmethod(sfz_class, (t_method)sfz_touch, gensym("touch"), A_FLOAT, 0);
     class_addmethod(sfz_class, (t_method)sfz_polytouch, gensym("polytouch"), A_FLOAT, A_FLOAT, 0);
-    class_addmethod(sfz_class, (t_method)sfz_load, gensym("open"), A_DEFSYM, 0);
+    class_addmethod(sfz_class, (t_method)sfz_open, gensym("open"), A_DEFSYM, 0);
     class_addmethod(sfz_class, (t_method)sfz_voices, gensym("voices"), A_FLOAT, 0);
     class_addmethod(sfz_class, (t_method)sfz_version, gensym("version"), 0);
 }
